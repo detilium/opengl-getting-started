@@ -1,3 +1,0 @@
-﻿  init.cpp
-D:\Development\Game dev tools\Learning projects\OpenGLPlayground\OpenGLPlayground\init.cpp(239,19): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-  OpenGLPlayground.vcxproj -> D:\Development\Game dev tools\Learning projects\OpenGLPlayground\x64\Debug\OpenGLPlayground.exe
