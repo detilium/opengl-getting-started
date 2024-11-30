@@ -82,8 +82,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>D:\Development\Game dev tools\OpenGL\Include;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Development\Game dev tools\OpenGL\Libs;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\Development\Game dev - Workspace\OpenGL\Include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Development\Game dev - Workspace\OpenGL\Libs;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
