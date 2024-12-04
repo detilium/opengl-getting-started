@@ -1,6 +1,9 @@
 #include <glad\glad.h>
 #include <GLFW\glfw3.h>
 #include "stb_image.h"
+#include <glm\glm.hpp>
+#include <glm\gtc\matrix_transform.hpp>
+#include <glm\gtc\type_ptr.hpp>
 
 #include "Shader.h"
 
@@ -8,9 +11,32 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+
+bool firstMouse = true;
+float yaw = -90.0f;
+float pitch = 0.0f;
+float fov = 45.0f;
+float lastX, lastY;
+const float MouseSensitivity = 0.1f;
+
+const int SCR_WIDTH = 800;
+const int SCR_HEIGHT = 600;
 
 int main()
 {
+	// Set defaults.
+	lastX = SCR_WIDTH / 2;
+	lastY = SCR_HEIGHT / 2;
+
 	// Initialize and configure GLFW
 	// -----------------------------
 	glfwInit();
@@ -38,6 +64,15 @@ int main()
 	// Tell GLFW to register the framebuffer callback to handle window resizing.
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+	// Tell GLFW to hide and capture the cursor.
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+	// Tell GLFW what function to call whenever the mouse cursor moves.
+	glfwSetCursorPosCallback(window, mouse_callback);
+
+	// Tell GLFW what function to call on mouse scrolling.
+	glfwSetScrollCallback(window, scroll_callback);
+
 	// Load all OpenGL function pointers for GLAD
 	// ------------------------------------------
 	// Loads all OpenGL function pointers based on the version we told it to use (in this instance OpenGL v3.3).
@@ -46,6 +81,8 @@ int main()
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return -1;
 	}
+
+	glEnable(GL_DEPTH_TEST);
 
 	// Build and compile our shader program
 	// ------------------------------------
@@ -61,26 +98,62 @@ int main()
 	// Texture coordinates are used to map a 2D texture to the object, in this case the triangle,
 	// and range from 0 to 1 on the x and y axis, relative to the object we want to draw.
 	float vertices[] = {
-		// positions		  // colors			  // texture coords
-		 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,    // top right
-		 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,    // bottom right
-		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,    // bottom left
-		-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f     // top left
+	-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+
+	-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
+	 0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	 0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+	-0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
+	-0.5f,  0.5f, -0.5f,  0.0f, 1.0f
 	};
 
 	// Drawing other shapes that triangles, but with the basis of a triangle as OpenGL prefers triangles.
 	// By utilizing indices (known as indexed drawing) and element buffer objects (EBO), we can combine to triangles to draw a rectangle,
 	// but without the overhead of drawing the same points multiple times.
-	unsigned int indices[] = {
-		0, 1, 3,  // first triangle
-		1, 2, 3   // second triangle
-	};
+	//unsigned int indices[] = {
+	//	0, 1, 3,  // first triangle
+	//	1, 2, 3   // second triangle
+	//};
 
 	// All OpenGL buffer objects have a unique ID corresponding to that specific buffer, in this case:
 	//		- vertex array object (VAO)
 	//		- vertex buffer object (VBO)
 	//		- element buffer object (EBO)
-	unsigned int VAO, VBO, EBO;
+	unsigned int VAO, VBO;//, EBO;
 
 	// Instantiate the vertex array object.
 	// A vertex array object can be bound just like a vert buffer. All subsequent vertex attribute calls (glVertexAttribPointer, glEnableVertexAttribArray)
@@ -97,7 +170,7 @@ int main()
 	glGenBuffers(1, &VBO);
 
 	// Instatiate the element buffer object.
-	glGenBuffers(1, &EBO);
+	//glGenBuffers(1, &EBO);
 
 	// Bind vertex array object (VAO) first, then bind and set vertex buffer object(s) (VBO), and then configure vertex attribute(s).
 	glBindVertexArray(VAO);
@@ -114,8 +187,8 @@ int main()
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
 	// Bind EBO.
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 	// Linking vertex attributes.
 	// We now added the vertex data to the GPU memory, as well as instructed the GPU how to handle the vertex data within a vertex and fragment shader.
@@ -135,19 +208,19 @@ int main()
 	//		Since the position data is at the start of the data array, this value is just 0 - there's no offset.
 
 	// Position attribute.
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
 
 	// Now that we told OpenGL how to interpret the vertex data, we also need to enable the vertex attribute,
 	// giving the vertex attribute location as the argument (vertex attributes are disabled by default).
 	glEnableVertexAttribArray(0);
 
 	// Color attribute.
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+	/*glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);*/
 
 	// Texture coordinates attribute.
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
 
 	// Generating textures
 	// -------------------
@@ -255,13 +328,33 @@ int main()
 	shader.setInt("texture1", 0);
 	shader.setInt("texture2", 1);
 
-	// Bind element buffer (EBO) and copy the indices data.
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+	// Using GLM to create an orthographic projection matrix.
+	//glm::ortho(0.0f, 800.0f, 0.0f, 600.0f, 0.1f, 100.0f);
+
+	// Using GLM to create a perspective projection matrix.
+	//glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 0.1f, 100.0f);
+
+	// Let's make 10 different cubes at various locations.
+	glm::vec3 cubePositions[] = {
+		glm::vec3( 0.0f,  0.0f,  0.0f),
+		glm::vec3( 2.0f,  5.0f, -15.0f),
+		glm::vec3(-1.5f, -2.2f, -2.5f),
+		glm::vec3(-3.8f, -2.0f, -12.3f),
+		glm::vec3( 2.4f, -0.4f, -3.5f),
+		glm::vec3(-1.7f,  3.0f, -7.5f),
+		glm::vec3( 1.3f, -2.0f, -2.5f),
+		glm::vec3( 1.5f,  2.0f, -2.5f),
+		glm::vec3( 1.5f,  0.2f, -1.5f),
+		glm::vec3(-1.3f,  1.0f, -1.5f)
+	};
 
 	// Render loop - continue to run until GLFW has been instructed to close.
 	while (!glfwWindowShouldClose(window))
 	{
+		float currentFrame = glfwGetTime();
+		deltaTime = currentFrame - lastFrame;
+		lastFrame = currentFrame;
+
 		// Handle input
 		// ------------
 		processInput(window);
@@ -272,9 +365,11 @@ int main()
 		// Define the color we want to clear the buffer with.
 		glClearColor(0.f, 0.3f, 0.3f, 1.0f);
 
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 		// Clear the buffer (the specific buffer we're clearing is defined by GL_COLOR_BUFFER_BIT).
 		// Whenever we call glClear and clear the color buffer, the entire color buffer will be filled with the color as configured by glClearColor.
-		glClear(GL_COLOR_BUFFER_BIT);
+		//glClear(GL_COLOR_BUFFER_BIT);
 		
 		// Playing with uniform data type in conjunction with the fragment shader.
 		// Vertex attributes of type uniform are global for the specific shader program, meaning that they are accessible from any shader at any stage in the shader program.
@@ -303,8 +398,31 @@ int main()
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // To reverse wireframe mode back to solid.
 
+		// The view matrix can be thought of as the camera of the player or the viewer.
+		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+		shader.setMat4("view", view);
+
+		// The projection matrix defines whether we're using perspective or orthographic projection.
+		glm::mat4 projection = glm::mat4(1.0f);
+		projection = glm::perspective(glm::radians(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+		shader.setMat4("projection", projection);
+
 		// Bind out VAO (the triangle information)
 		glBindVertexArray(VAO);
+		for (unsigned int i = 0; i < 10; i++)
+		{
+			// The model matrix defines the transform properties of the object.
+			// The matrix consists of: location (translate) rotation, and scale.
+			glm::mat4 model = glm::mat4(1.0f);
+			// Model translation defines the objects world location.
+			model = glm::translate(model, cubePositions[i]);
+			float angle = 20.0f * i;
+			model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+			shader.setMat4("model", model);
+
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+		}
 
 		// Draw based on vertex buffer object (VBO).
 		// NOTE: The pure glDrawArrays is only relevant when no element buffer object (EBO) is in play.
@@ -313,13 +431,19 @@ int main()
 		// - 3rd argument specifies how many vertices we want to draw (render 1 triangle from our data, which is 3 vertices long)
 		//glDrawArrays(GL_TRIANGLES, 0, 3);
 
+		/*glm::mat4 model = glm::mat4(1.0f);
+		model = glm::rotate(model, (float)glfwGetTime() * glm::radians(50.0f), glm::vec3(0.5f, 1.0f, 0.0f));
+		shader.setMat4("model", model);*/
+
 		// Draw based on element buffer object (EBO)
 		// NOTE: glDrawelements is only relevant when an element buffer object (EBO) is in play.
 		// - 1st argument specifices the primitive shape that'll be our basis
 		// - 2nd argument specifies the count or number of elements we'd like to draw. As we have 6 indices, we want to draw 6 vertices.
 		// - 3rd argument specifies  the type of indicies which is of type GL_UNSIGNED_INT
 		// - 4th argument allows us to specify an offset in the element buffer (EBO)
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+		//glDrawArrays(GL_TRIANGLES, 0, 36);
 		
 		//glBindVertexArray(0);
 
@@ -360,4 +484,64 @@ void processInput(GLFWwindow* window)
 	// glfwGetKey will return GLFW_PRESS is the key is currently being pressed, while returning GLFW_RELEASE if it's not.
 	if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
+
+	const float cameraSpeed = 2.5f * deltaTime;
+	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		cameraPos += cameraSpeed * cameraFront;
+	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		cameraPos -= cameraSpeed * cameraFront;
+	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
+
+ // Process mouse movement.
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+	float xpos = static_cast<float>(xposIn);
+	float ypos = static_cast<float>(yposIn);
+
+	if (firstMouse)
+	{
+		std::cout << "First mouse" << std::endl;
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+
+	float xOffset = xpos - lastX;
+	
+	// Reversed since y-coordinates range from bottom to top.
+	float yOffset = lastY - ypos;
+
+	lastX = xpos;
+	lastY = ypos;
+
+	xOffset *= MouseSensitivity;
+	yOffset *= MouseSensitivity;
+
+	yaw += xOffset;
+	pitch += yOffset;
+
+	// Constraints to disallow the camera to make weird movements.
+	if(pitch > 89.0f)
+		pitch = 89.0f;
+	if(pitch < -89.0f)
+		pitch = -89.0f;
+
+	glm::vec3 direction;
+	direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+	direction.y = sin(glm::radians(pitch));
+	direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+	cameraFront = glm::normalize(direction);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	fov -= (float)yoffset;
+	if(fov < 1.0f)
+		fov = 1.0f;
+	if(fov > 90.0f)
+		fov = 90.0f;
 }
