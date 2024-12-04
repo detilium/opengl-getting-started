@@ -104,6 +104,6 @@ private:
 		front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
 		Front = glm::normalize(front);
 		Right = glm::normalize(glm::cross(Front, WorldUp));
-		UP = glm::normalize(glm::cross(Right, Front));
+		Up = glm::normalize(glm::cross(Right, Front));
 	}
 };
